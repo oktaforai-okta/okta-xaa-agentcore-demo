@@ -1,0 +1,15 @@
+# The BFF on its own, for hosts that only run the frontend. The root requirements.txt
+# is a superset of this. boto3 isn't needed: deploy/_common.py only imports it inside
+# the AWS helpers, which the BFF never calls.
+fastapi>=0.115
+uvicorn[standard]>=0.32
+# SessionMiddleware signs the session cookie with it
+itsdangerous>=2.2
+jinja2>=3.1
+# Form(...) parameters
+python-multipart>=0.0.18
+httpx>=0.27
+
+# Signing the AI Agent's private_key_jwt client assertion (RS256 needs cryptography)
+pyjwt[crypto]>=2.9
+cryptography>=43
