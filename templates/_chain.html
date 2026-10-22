@@ -1,0 +1,28 @@
+{#- The five-hop delegation chain. The chat page lights hops up as SSE events arrive,
+    keyed by data-hop; the home page shows it statically. -#}
+<div class="chain-viz" id="chain">
+  <div class="hop" data-hop="user">
+    <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+    <div class="label">You</div><div class="sub">Okta sign-in</div>
+  </div>
+  <div class="link"><div class="wire"></div><div class="tok">T_user</div></div>
+  <div class="hop" data-hop="bff">
+    <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div>
+    <div class="label">BFF</div><div class="sub">holds tokens</div>
+  </div>
+  <div class="link"><div class="wire"></div><div class="tok">T_user</div></div>
+  <div class="hop" data-hop="agent">
+    <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01M9 16h6"/></svg></div>
+    <div class="label">Agent</div><div class="sub">AgentCore Runtime</div>
+  </div>
+  <div class="link"><div class="wire"></div><div class="tok">OBO &rarr; T_gateway</div></div>
+  <div class="hop key" data-hop="gateway">
+    <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+    <div class="label">Gateway</div><div class="sub">XAA interceptor</div>
+  </div>
+  <div class="link"><div class="wire"></div><div class="tok">ID-JAG &rarr; T_tool</div></div>
+  <div class="hop" data-hop="api">
+    <div class="node"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+    <div class="label">Todo API</div><div class="sub">sub = you, act = agent</div>
+  </div>
+</div>

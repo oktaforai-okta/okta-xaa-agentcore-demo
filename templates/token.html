@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Token claims &middot; Okta XAA &middot; AgentCore{% endblock %}
+{% block styles %}
+    .tok-head h1 { font-size: 2rem; font-weight: 800; }
+    .tok-head p { color: var(--text-2); max-width: 46rem; margin: .6rem 0 1.75rem; font-size: .92rem; }
+    .tok-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 860px) { .tok-grid { grid-template-columns: 1fr; } }
+    .tok-card { overflow: hidden; }
+    .tok-card .hd { padding: 1rem 1.1rem; border-bottom: 1px solid var(--border);
+                    display: flex; align-items: center; gap: .7rem; }
+    .tok-card .hd .badge { font: 600 .72rem var(--mono); padding: .25rem .55rem; border-radius: 7px; }
+    .badge.at { background: rgba(109,124,255,.15); color: #a5b4fc; border: 1px solid rgba(109,124,255,.35); }
+    .badge.id { background: rgba(34,211,238,.12); color: #67e8f9; border: 1px solid rgba(34,211,238,.35); }
+    .tok-card .hd h3 { font-size: .95rem; }
+    .tok-card .hd span.tiny { display: block; }
+    .banner { margin-top: 1.25rem; }
+{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="tok-head">
+    <span class="pill warn"><span class="dot"></span>Debug view</span>
+    <h1 style="margin-top:.9rem">Token claims</h1>
+    <p>This page renders claims only, never token material. The tokens themselves
+      <em>are</em> in your session cookie, which is signed but <strong>not encrypted</strong>:
+      fine for localhost, not for production. See the note in <code>frontend/app.py</code>.</p>
+  </div>
+
+  <div class="tok-grid">
+    <div class="glass tok-card">
+      <div class="hd"><span class="badge at">T_user</span>
+        <div><h3>Access token</h3><span class="tiny">invokes the agent</span></div></div>
+      <table class="claims">
+        <tr><th>iss</th><td>{{ access.iss }}</td></tr>
+        <tr><th>aud</th><td>{{ access.aud }}</td></tr>
+        <tr><th>sub</th><td>{{ access.sub }}</td></tr>
+        <tr><th>cid</th><td>{{ access.cid }}</td></tr>
+        <tr><th>scp</th><td>{{ access.scp }}</td></tr>
+      </table>
+    </div>
+    <div class="glass tok-card">
+      <div class="hd"><span class="badge id">T_id</span>
+        <div><h3>ID token</h3><span class="tiny">the subject of ID-JAG leg 1</span></div></div>
+      <table class="claims">
+        <tr><th>iss</th><td>{{ id.iss }}</td></tr>
+        <tr><th>aud</th><td>{{ id.aud }}</td></tr>
+        <tr><th>sub</th><td>{{ id.sub }}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="banner" style="border-color:rgba(109,124,255,.35);background:rgba(109,124,255,.08);color:#c7d2fe">
+    <span>&#9432;</span>
+    <div>The two <code>sub</code> values differ: the ID token carries the Okta <em>user id</em>,
+      the access token the <em>email</em>. Both refer to you.</div>
+  </div>
+</div>
+{% endblock %}

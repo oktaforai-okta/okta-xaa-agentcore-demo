@@ -1,0 +1,623 @@
+{% extends "base.html" %}
+{% block title %}Assistant &middot; Okta XAA &middot; AgentCore{% endblock %}
+{% block bodyclass %}chat{% endblock %}
+{% block styles %}
+    body.chat footer.site { display: none; }
+    .chat-wrap { max-width: 86rem; margin: 0 auto; padding: 1.25rem 1.5rem 1.5rem;
+                 display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 1.25rem;
+                 height: calc(100vh - 62px); }
+    @media (max-width: 1000px) { .chat-wrap { grid-template-columns: 1fr; height: auto; } }
+
+    /* ── Conversation column ───────────────────────────────────────────────── */
+    .convo { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .convo-head { display: flex; align-items: center; gap: .8rem; padding: 1rem 1.25rem;
+                  border-bottom: 1px solid var(--border); }
+    .bot-av { width: 38px; height: 38px; border-radius: 12px; background: var(--grad);
+              display: grid; place-items: center; flex: none;
+              box-shadow: 0 6px 20px -6px rgba(124,92,255,.8); }
+    .bot-av svg { width: 20px; height: 20px; }
+    .convo-head h1 { font-size: 1rem; font-weight: 700; letter-spacing: -.01em; }
+    .convo-head .status { font-size: .76rem; color: var(--text-3); display: flex; gap: .4rem; align-items: center; }
+    .convo-head .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+    .convo-head .status.busy .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .3; } }
+
+    .thread { flex: 1; overflow-y: auto; padding: 1.5rem 1.25rem; display: flex;
+              flex-direction: column; gap: 1.1rem; scroll-behavior: smooth; min-height: 50vh; }
+    .thread::-webkit-scrollbar { width: 8px; }
+    .thread::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 8px; }
+
+    .row { display: flex; gap: .7rem; align-items: flex-end; max-width: 82%;
+           animation: rise .3s ease both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .row.user { align-self: flex-end; flex-direction: row-reverse; }
+    .row .av { flex: none; width: 30px; height: 30px; border-radius: 10px; display: grid;
+               place-items: center; font-size: .75rem; font-weight: 700; color: #fff; }
+    .row.agent .av, .row.fail .av { background: var(--grad); }
+    .row.user .av { background: linear-gradient(135deg, #0ea5e9, #6366f1); border-radius: 50%; }
+    .row .av svg { width: 16px; height: 16px; }
+
+    .turn { padding: .75rem 1rem; border-radius: 16px; overflow-wrap: anywhere; font-size: .93rem;
+            line-height: 1.6; }
+    .turn.user { background: linear-gradient(135deg, #5b6cff, #8b5cf6); color: #fff;
+                 border-bottom-right-radius: 5px; white-space: pre-wrap;
+                 box-shadow: 0 8px 24px -10px rgba(99, 102, 241, .8); }
+    .turn.agent { background: var(--surface-2); border: 1px solid var(--border);
+                  border-bottom-left-radius: 5px; }
+    .turn.agent p { margin: 0 0 .55rem; } .turn.agent p:last-child { margin-bottom: 0; }
+    .turn.agent ul, .turn.agent ol { margin: .2rem 0 .55rem; padding-left: 1.25rem; }
+    .turn.agent li { margin: .15rem 0; }
+    .turn.agent strong { color: #fff; }
+    .turn.fail { background: rgba(248, 113, 113, .08); border: 1px solid rgba(248, 113, 113, .4);
+                 color: #fecaca; font-size: .86rem; border-bottom-left-radius: 5px; }
+    .turn.fail b { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
+                   color: var(--bad); margin-bottom: .2rem; }
+    .note { align-self: center; font-size: .76rem; color: #fde68a; padding: .4rem .85rem;
+            border-radius: 999px; border: 1px solid rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+    /* The blinking caret is the cue that text is still arriving. */
+    .turn.agent.live > :last-child::after { content: ""; display: inline-block; width: 7px; height: 1em;
+      margin-left: 2px; vertical-align: -2px; background: var(--accent); border-radius: 2px;
+      animation: pulse .9s steps(2) infinite; }
+
+    .typing { display: inline-flex; gap: 4px; padding: .3rem 0; }
+    .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3);
+                animation: bounce 1.2s infinite ease-in-out; }
+    .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .5; }
+                        30% { transform: translateY(-5px); opacity: 1; } }
+
+    .empty-state { margin: auto; text-align: center; max-width: 30rem; padding: 2rem 0; }
+    .empty-state .bot-av { width: 60px; height: 60px; border-radius: 18px; margin: 0 auto 1.1rem; }
+    .empty-state .bot-av svg { width: 30px; height: 30px; }
+    .empty-state h2 { font-size: 1.45rem; font-weight: 700; }
+    .empty-state p { color: var(--text-2); font-size: .92rem; margin: .5rem 0 0; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: .5rem; padding: 0 1.25rem .75rem; }
+    .chip { font: 500 .8rem var(--font); color: var(--text-2); background: var(--surface);
+            border: 1px solid var(--border); padding: .45rem .8rem; border-radius: 999px;
+            cursor: pointer; transition: all .15s; }
+    .chip:hover { color: var(--text); border-color: rgba(109,124,255,.6); background: rgba(109,124,255,.1); }
+    .chip:disabled { opacity: .4; cursor: default; }
+
+    .composer-wrap { padding: .25rem 1.25rem 1.1rem; }
+    .composer { display: flex; gap: .5rem; align-items: center; padding: .4rem .4rem .4rem 1rem;
+                border-radius: 16px; background: rgba(0,0,0,.3); border: 1px solid var(--border-strong);
+                transition: border-color .2s, box-shadow .2s; }
+    .composer:focus-within { border-color: rgba(109,124,255,.7); box-shadow: 0 0 0 4px rgba(109,124,255,.15); }
+    .composer input { flex: 1; font: inherit; font-size: .95rem; color: var(--text); background: transparent;
+                      border: 0; outline: 0; padding: .55rem 0; }
+    .composer input::placeholder { color: var(--text-3); }
+    .composer .send { width: 42px; height: 42px; padding: 0; border-radius: 12px; }
+    .composer .send svg { width: 18px; height: 18px; }
+    .composer .send[disabled] { opacity: .55; cursor: progress; transform: none; }
+    .composer-foot { display: flex; justify-content: space-between; align-items: center;
+                     margin-top: .55rem; font-size: .72rem; color: var(--text-3); }
+    .composer-foot form { margin: 0; }
+
+    /* ── Side column ───────────────────────────────────────────────────────── */
+    aside { display: flex; flex-direction: column; gap: 1rem; min-height: 0; overflow-y: auto; }
+    .panel { padding: 1rem 1.1rem; }
+    .panel h4 { margin: 0 0 .8rem; display: flex; align-items: center; justify-content: space-between;
+                font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .09em;
+                color: var(--text-3); }
+    .panel h4 .count { font: 500 .7rem var(--mono); color: var(--text-2); background: var(--surface-2);
+                       padding: .1rem .45rem; border-radius: 6px; }
+    .panel .empty { color: var(--text-3); font-size: .82rem; margin: 0; }
+
+    .panel.chainp { padding: 1.1rem .6rem .9rem; }
+    .panel.chainp h4 { padding: 0 .5rem; }
+    .chainp .hop .node { width: 36px; height: 36px; border-radius: 11px; }
+    .chainp .hop .node svg { width: 16px; height: 16px; }
+    .chainp .hop .label { font-size: .64rem; }
+    .chainp .hop .sub, .chainp .link .tok { display: none; }
+    .chainp .link { padding-top: 17px; min-width: .8rem; }
+    .chainp .link .wire::after { display: none; }
+    .chainp.active .link .wire::after { display: block; }
+    .chain-status { margin: .8rem .5rem 0; font: 500 .72rem var(--mono); color: var(--text-3);
+                    min-height: 1.1em; text-align: center; }
+
+    .call { display: flex; gap: .6rem; align-items: flex-start; padding: .55rem 0;
+            border-top: 1px solid var(--border); animation: rise .25s ease both; }
+    .call:first-child { border-top: 0; padding-top: 0; }
+    .call .mark { flex: none; width: 20px; height: 20px; border-radius: 6px; display: grid;
+                  place-items: center; font-size: .7rem; font-weight: 700; margin-top: 1px;
+                  background: rgba(34,211,238,.12); color: var(--accent); }
+    .call .mark.ok { background: rgba(52,211,153,.14); color: var(--ok); }
+    .call .mark.no { background: rgba(248,113,113,.14); color: var(--bad); }
+    .call .mark.pending::before { content: ""; width: 9px; height: 9px; border-radius: 50%;
+                                  border: 2px solid currentColor; border-right-color: transparent;
+                                  animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .call code { background: none; border: 0; padding: 0; font-size: .8rem; color: var(--text); }
+    .call .note { display: block; color: var(--text-3); font-size: .72rem; margin-top: .1rem;
+                  overflow-wrap: anywhere; }
+
+    ul.todos { list-style: none; padding: 0; margin: 0; display: grid; gap: .4rem; }
+    ul.todos li { display: flex; gap: .6rem; align-items: center; padding: .5rem .65rem; border-radius: 10px;
+                  background: var(--surface); border: 1px solid var(--border); font-size: .85rem;
+                  animation: rise .25s ease both; }
+    ul.todos .box { flex: none; width: 16px; height: 16px; border-radius: 5px;
+                    border: 1.5px solid var(--border-strong); display: grid; place-items: center; }
+    ul.todos li.done { color: var(--text-3); }
+    ul.todos li.done .t { text-decoration: line-through; }
+    ul.todos li.done .box { background: var(--ok); border-color: var(--ok); }
+    ul.todos li.done .box::after { content: "✓"; color: #052e1c; font-size: .65rem; font-weight: 800; }
+    ul.todos .id { margin-left: auto; font: .68rem var(--mono); color: var(--text-3); }
+
+    .id-grid { display: grid; gap: .55rem; }
+    .id-row { padding: .6rem .7rem; border-radius: 10px; background: var(--surface);
+              border: 1px solid var(--border); animation: rise .25s ease both; }
+    .id-row .k { font-size: .64rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+                 color: var(--text-3); }
+    .id-row .v { font: .8rem var(--mono); overflow-wrap: anywhere; margin-top: .15rem; }
+    .id-row.sub { border-color: rgba(14,165,233,.35); background: rgba(14,165,233,.07); }
+    .id-row.act { border-color: rgba(168,85,247,.35); background: rgba(168,85,247,.07); }
+    .scopes { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .3rem; }
+    .scopes span { font: .68rem var(--mono); padding: .15rem .45rem; border-radius: 6px;
+                   background: var(--surface-2); border: 1px solid var(--border); }
+    .panel .foot { font-size: .72rem; color: var(--text-3); margin: .7rem 0 0; }
+    .banner { margin: 0 1.25rem 1rem; }
+{% endblock %}
+{% block body %}
+<div class="chat-wrap">
+  <section class="glass convo">
+    <div class="convo-head">
+      <span class="bot-av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01M9 16h6"/></svg></span>
+      <div>
+        <h1>Todo assistant</h1>
+        <div class="status" id="status"><span class="dot"></span><span id="status-text">Ready &middot; acting on behalf of {{ user }}</span></div>
+      </div>
+    </div>
+
+    <div class="thread" id="thread">
+      {% if not runtime_configured %}
+        <div class="banner">
+          <span>&#9888;</span>
+          <div><strong>The agent is not deployed yet.</strong> <code>AGENT_RUNTIME_INVOKE_URL</code> is unset in <code>.env</code>.
+            <div class="muted">Until then you can still prove the gateway half of the chain with <code>python scripts/verify_ai_agent.py</code>.</div></div>
+        </div>
+      {% endif %}
+      {% for m in messages %}
+        {% if m.sender == 'user' %}
+          <div class="row user"><span class="av">{{ (user or '?')[:1] | upper }}</span><div class="turn user">{{ m.message }}</div></div>
+        {% else %}
+          <div class="row agent"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z"/></svg></span><div class="turn agent md">{{ m.message }}</div></div>
+        {% endif %}
+      {% endfor %}
+      {% if not messages %}
+        <div class="empty-state" id="empty">
+          <span class="bot-av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01M9 16h6"/></svg></span>
+          <h2>How can I help with your list?</h2>
+          <p>I can read your todos, add items and mark them done &mdash; every call goes
+            through the gateway as <strong>you</strong>, with me recorded as the actor.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="chips" id="chips">
+      <button type="button" class="chip">What is on my todo list?</button>
+      <button type="button" class="chip">Add buy milk to my list</button>
+      <button type="button" class="chip">Mark it done</button>
+      <button type="button" class="chip">Who am I according to the todo API?</button>
+    </div>
+
+    <div class="composer-wrap">
+      <form class="composer" id="composer" autocomplete="off">
+        <input type="text" id="prompt" name="prompt" value="{{ default_prompt }}"
+               placeholder="Ask about your todos…" required>
+        <button type="submit" id="send" class="btn btn-primary send" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </form>
+      <div class="composer-foot">
+        <span>&ldquo;Mark it done&rdquo; works because the conversation is remembered on the runtime.</span>
+        <form method="post" action="/chat/clear"
+              onsubmit="return confirm('Clear this conversation? The agent forgets it too.')">
+          <button type="submit" class="btn btn-ghost btn-sm">Clear conversation</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="glass panel chainp" id="chainp">
+      <h4>Delegation chain</h4>
+      {% include "_chain.html" %}
+      <div class="chain-status" id="chain-status">idle</div>
+    </div>
+
+    <div class="glass panel">
+      <h4>Tool calls <span class="count" id="calls-count">0</span></h4>
+      <div id="calls"><p class="empty">Nothing called yet.</p></div>
+    </div>
+
+    <div class="glass panel">
+      <h4>Your todos <span class="count" id="todos-count">&ndash;</span></h4>
+      <div id="todos"><p class="empty">Ask what is on your list.</p></div>
+    </div>
+
+    <div class="glass panel">
+      <h4>Who the API saw</h4>
+      <div id="identity">
+        <p class="empty">Ask &ldquo;who am I according to the todo API?&rdquo;</p>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+// Reads the BFF's SSE relay and paints the page. The event vocabulary is defined in
+// agent/agent.py; the BFF forwards it unchanged.
+(function () {
+  const thread = document.getElementById('thread');
+  const form = document.getElementById('composer');
+  const input = document.getElementById('prompt');
+  const send = document.getElementById('send');
+  const callsBox = document.getElementById('calls');
+  const todosBox = document.getElementById('todos');
+  const idBox = document.getElementById('identity');
+  const chips = document.querySelectorAll('#chips .chip');
+  const statusEl = document.getElementById('status');
+  const statusText = document.getElementById('status-text');
+  const chainPanel = document.getElementById('chainp');
+  const chainStatus = document.getElementById('chain-status');
+  const hops = {};
+  chainPanel.querySelectorAll('.hop').forEach(h => { hops[h.dataset.hop] = h; });
+  const userInitial = {{ ((user or '?')[:1] | upper) | tojson }};
+  const idleStatus = statusText.textContent;
+
+  const SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z"/></svg>';
+
+  const calls = new Map();
+  const bottom = () => { thread.scrollTop = thread.scrollHeight; };
+
+  // Minimal markdown: escape first, then bold, inline code and bullet/numbered lists.
+  // Model output is never inserted as raw HTML.
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function inline(s) {
+    return esc(s)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/~~([^~]+)~~/g, '<s>$1</s>');
+  }
+  function md(text) {
+    const out = [];
+    let list = null;
+    let para = [];
+    const flushPara = () => { if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; } };
+    const flushList = () => { if (list) { out.push('<' + list.tag + '>' + list.items.join('') + '</' + list.tag + '>'); list = null; } };
+    for (const line of text.split('\n')) {
+      const ul = line.match(/^\s*[-*•]\s+(.*)$/);
+      const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (ul || ol) {
+        flushPara();
+        const tag = ul ? 'ul' : 'ol';
+        if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
+        list.items.push('<li>' + inline((ul || ol)[1]) + '</li>');
+      } else if (!line.trim()) {
+        flushPara(); flushList();
+      } else {
+        flushList(); para.push(line);
+      }
+    }
+    flushPara(); flushList();
+    return out.join('') || '<p></p>';
+  }
+  thread.querySelectorAll('.turn.md').forEach(el => {
+    el.innerHTML = md(el.textContent);
+  });
+  bottom();
+
+  function clearEmpty() {
+    const e = document.getElementById('empty');
+    if (e) e.remove();
+  }
+
+  function row(kind) {
+    clearEmpty();
+    const r = document.createElement('div');
+    r.className = 'row ' + kind;
+    const av = document.createElement('span');
+    av.className = 'av';
+    if (kind === 'user') av.textContent = userInitial; else av.innerHTML = SHIELD;
+    r.appendChild(av);
+    thread.appendChild(r);
+    return r;
+  }
+
+  function bubble(kind, label, text) {
+    if (kind === 'note') {
+      const n = document.createElement('div');
+      n.className = 'note';
+      n.textContent = text;
+      thread.appendChild(n);
+      bottom();
+      return n;
+    }
+    const r = row(kind === 'user' ? 'user' : kind === 'fail' ? 'fail' : 'agent');
+    const el = document.createElement('div');
+    el.className = 'turn ' + kind;
+    if (kind === 'fail') {
+      const b = document.createElement('b');
+      b.textContent = label;
+      el.appendChild(b);
+      el.appendChild(document.createTextNode(text || ''));
+    } else {
+      el.textContent = text || '';
+    }
+    r.appendChild(el);
+    bottom();
+    return el;
+  }
+
+  function typing() {
+    const r = row('agent');
+    r.innerHTML += '<div class="turn agent"><span class="typing"><i></i><i></i><i></i></span></div>';
+    bottom();
+    return r;
+  }
+
+  // ── Chain visual ──────────────────────────────────────────────────────────
+  function setHop(name, cls) {
+    const h = hops[name];
+    if (!h) return;
+    h.classList.remove('on', 'ok', 'no');
+    if (cls) h.classList.add(cls);
+  }
+  function chainReset() {
+    Object.keys(hops).forEach(k => setHop(k, ''));
+    chainPanel.classList.remove('active');
+  }
+  function chainSay(s) { chainStatus.textContent = s; }
+
+  function busy(on, text) {
+    statusEl.classList.toggle('busy', on);
+    statusText.textContent = on ? text : idleStatus;
+  }
+
+  function paintCalls() {
+    document.getElementById('calls-count').textContent = calls.size;
+    if (!calls.size) return;
+    callsBox.textContent = '';
+    for (const c of calls.values()) {
+      const r = document.createElement('div');
+      r.className = 'call';
+
+      const mark = document.createElement('span');
+      mark.className = 'mark ' + (c.ok === undefined ? 'pending' : c.ok ? 'ok' : 'no');
+      if (c.ok !== undefined) mark.textContent = c.ok ? '✓' : '✗';
+      r.appendChild(mark);
+
+      const body = document.createElement('div');
+      const name = document.createElement('code');
+      name.textContent = c.name;
+      body.appendChild(name);
+
+      const bits = [];
+      if (c.args) {
+        for (const [k, v] of Object.entries(c.args)) bits.push(k + '=' + v);
+      }
+      if (c.summary) bits.push(c.summary);
+      if (bits.length) {
+        const note = document.createElement('span');
+        note.className = 'note';
+        note.textContent = bits.join(' · ');
+        body.appendChild(note);
+      }
+      r.appendChild(body);
+      callsBox.appendChild(r);
+    }
+  }
+
+  function paintTodos(items) {
+    todosBox.textContent = '';
+    document.getElementById('todos-count').textContent = items.filter(t => !t.done).length + '/' + items.length;
+    if (!items.length) {
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = 'The list is empty.';
+      todosBox.appendChild(p);
+      return;
+    }
+    const ul = document.createElement('ul');
+    ul.className = 'todos';
+    for (const t of items) {
+      const li = document.createElement('li');
+      if (t.done) li.className = 'done';
+      const box = document.createElement('span');
+      box.className = 'box';
+      const title = document.createElement('span');
+      title.className = 't';
+      title.textContent = t.title;
+      li.append(box, title);
+      if (t.id != null) {
+        const id = document.createElement('span');
+        id.className = 'id';
+        id.textContent = '#' + t.id;
+        li.appendChild(id);
+      }
+      ul.appendChild(li);
+    }
+    todosBox.appendChild(ul);
+  }
+
+  function paintIdentity(ev) {
+    idBox.textContent = '';
+    const grid = document.createElement('div');
+    grid.className = 'id-grid';
+    const add = (cls, k, v) => {
+      const d = document.createElement('div');
+      d.className = 'id-row ' + cls;
+      const kk = document.createElement('div');
+      kk.className = 'k';
+      kk.textContent = k;
+      d.appendChild(kk);
+      if (v instanceof Node) d.appendChild(v);
+      else {
+        const vv = document.createElement('div');
+        vv.className = 'v';
+        vv.textContent = v;
+        d.appendChild(vv);
+      }
+      grid.appendChild(d);
+    };
+    add('sub', 'user · sub', ev.user);
+    add('act', 'acting agent · act', ev.acting_agent || '(none)');
+    const sc = document.createElement('div');
+    sc.className = 'scopes';
+    const scopes = ev.scopes || [];
+    if (!scopes.length) sc.textContent = '(none)';
+    for (const s of scopes) {
+      const span = document.createElement('span');
+      span.textContent = s;
+      sc.appendChild(span);
+    }
+    add('', 'scopes', sc);
+    idBox.appendChild(grid);
+    const note = document.createElement('p');
+    note.className = 'foot';
+    note.textContent = 'Claims from the token the API validated — your sub, the agent as act.';
+    idBox.appendChild(note);
+  }
+
+  function handle(ev, state) {
+    switch (ev.type) {
+      case 'turn.start':
+        setHop('agent', 'on');
+        chainSay('agent reasoning…');
+        // The microVM holding the history is recycled after a spell of inactivity.
+        // Saying so beats letting the agent look forgetful.
+        if (ev.session_fresh && thread.querySelectorAll('.row').length > 1) {
+          bubble('note', '', 'Starting a new context — earlier turns are no longer in memory.');
+        }
+        break;
+      case 'text':
+        if (!state.answer) {
+          if (state.typing) { state.typing.remove(); state.typing = null; }
+          state.answer = bubble('agent live', 'assistant', '');
+          state.text = '';
+        }
+        state.text += ev.data;
+        state.answer.innerHTML = md(state.text);
+        busy(true, 'Responding…');
+        bottom();
+        break;
+      case 'tool.start':
+        calls.set(ev.id, { name: ev.name });
+        state.tools++;
+        setHop('agent', 'ok');
+        setHop('gateway', 'on');
+        setHop('api', 'on');
+        chainSay('OBO → gateway → ID-JAG → ' + ev.name);
+        busy(true, 'Calling ' + ev.name + '…');
+        paintCalls();
+        break;
+      case 'tool.end': {
+        const r = calls.get(ev.id) || { name: ev.name };
+        r.ok = ev.ok;
+        r.summary = ev.summary;
+        r.args = ev.args;
+        calls.set(ev.id, r);
+        setHop('gateway', ev.ok ? 'ok' : 'no');
+        setHop('api', ev.ok ? 'ok' : 'no');
+        if (!ev.ok) state.failed = true;
+        chainSay(ev.name + (ev.ok ? ' ✓ as you' : ' ✗ denied'));
+        paintCalls();
+        break;
+      }
+      case 'todos':
+        paintTodos(ev.items || []);
+        break;
+      case 'identity':
+        paintIdentity(ev);
+        break;
+      case 'error':
+        state.failed = true;
+        if (state.typing) { state.typing.remove(); state.typing = null; }
+        bubble('fail', 'could not complete', ev.message);
+        break;
+    }
+  }
+
+  function setBusyControls(on) {
+    input.disabled = send.disabled = on;
+    chips.forEach(c => { c.disabled = on; });
+  }
+
+  async function submit(prompt) {
+    bubble('user', 'you', prompt);
+    input.value = '';
+    setBusyControls(true);
+    busy(true, 'Thinking…');
+    chainReset();
+    chainPanel.classList.add('active');
+    setHop('user', 'ok');
+    setHop('bff', 'ok');
+    setHop('agent', 'on');
+    chainSay('BFF → AgentCore Runtime with T_user');
+    const state = { answer: null, text: '', typing: typing(), tools: 0, failed: false };
+
+    try {
+      const resp = await fetch('/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ prompt: prompt }),
+      });
+      if (!resp.ok || !resp.body) {
+        state.failed = true;
+        bubble('fail', 'could not complete', 'HTTP ' + resp.status + ' from the BFF.');
+      } else {
+        // SSE frames are separated by a blank line and can split across chunks, so
+        // hold the tail until the next one arrives.
+        const reader = resp.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop();
+          for (const frame of frames) {
+            for (const line of frame.split('\n')) {
+              if (!line.startsWith('data:')) continue;
+              try {
+                handle(JSON.parse(line.slice(5).trim()), state);
+              } catch (err) {
+                /* a partial frame is not worth surfacing */
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      state.failed = true;
+      bubble('fail', 'could not complete', String(err));
+    } finally {
+      if (state.typing) state.typing.remove();
+      if (state.answer) state.answer.classList.remove('live');
+      chainPanel.classList.remove('active');
+      if (state.failed) {
+        if (!state.tools) setHop('agent', 'no');
+        chainSay('turn failed');
+      } else {
+        setHop('agent', 'ok');
+        chainSay(state.tools ? state.tools + ' delegated call' + (state.tools > 1 ? 's' : '') + ' · identity preserved'
+                             : 'answered without calling a tool');
+      }
+      busy(false);
+      setBusyControls(false);
+      input.focus();
+    }
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const prompt = input.value.trim();
+    if (prompt) submit(prompt);
+  });
+  chips.forEach(c => c.addEventListener('click', () => { if (!send.disabled) submit(c.textContent); }));
+})();
+</script>
+{% endblock %}
